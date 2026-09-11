@@ -1,0 +1,8 @@
+﻿node_modules/
+frontend/node_modules/
+__pycache__/
+*.py[cod]
+*.avi
+.env
+.env.*
+.DS_Store
