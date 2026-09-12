@@ -7,7 +7,10 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? "https://roadsenseai-production.up.railway.app" : "")
+).replace(/\/$/, "");
 
 /* =========================================================
    GEOJSON UPLOAD COMPONENT
