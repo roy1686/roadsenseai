@@ -1183,12 +1183,14 @@ export default function App() {
                     aspectRatio: '16/9'
                   }}>
                     <video
+                      key={videoMode}
                       ref={videoRef}
                       src={videoMode === 'raw' ? '/videos/raw_dashcam.mp4' : '/videos/detected_dashcam.mp4'}
                       autoPlay
                       loop
-                      muted={!soundAlerts}
+                      muted
                       playsInline
+                      controls
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onPlay={() => setIsPlaying(true)}
                       onPause={() => setIsPlaying(false)}
