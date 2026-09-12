@@ -80,9 +80,10 @@ def build_geojson(
         )
 
     if not rows:
-        raise ValueError(
-            "M1 input file contains no detections."
-        )
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump({"type": "FeatureCollection", "features": []}, f, indent=2)
+        print("[INFO] M1 input file contains 0 detections. Generated empty GeoJSON.")
+        return True
 
     # ---------------------------------------------------------
     # Group detections
