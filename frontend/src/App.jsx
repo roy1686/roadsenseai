@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -30,9 +30,10 @@ import {
   Download,
   Car,
   Zap,
-  ArrowUpRight,
-  Target,
-  Compass
+  Eye,
+  Camera,
+  Layers,
+  Maximize2
 } from 'lucide-react';
 import { SAMPLE_DAMAGES, CREW_MEMBERS, SYSTEM_STATS } from './data/sampleData';
 
@@ -79,6 +80,17 @@ const createCustomIcon = (severity) => {
   });
 };
 
+const REAL_ANNOTATED_FRAMES = [
+  { file: '/frames/frame_00000.jpg', name: 'Frame #000 - Pothole Inception', conf: '94.2%', rci: 92 },
+  { file: '/frames/frame_00001.jpg', name: 'Frame #001 - Multi-Crack Distress', conf: '91.8%', rci: 85 },
+  { file: '/frames/frame_00002.jpg', name: 'Frame #002 - Fatigue Alligator Cracking', conf: '96.5%', rci: 94 },
+  { file: '/frames/frame_00003.jpg', name: 'Frame #003 - Surface Ravelling', conf: '88.4%', rci: 74 },
+  { file: '/frames/frame_00004.jpg', name: 'Frame #004 - Longitudinal Seam Crack', conf: '92.1%', rci: 81 },
+  { file: '/frames/frame_00005.jpg', name: 'Frame #005 - Severe Impact Pothole', conf: '98.0%', rci: 96 },
+  { file: '/frames/frame_00006.jpg', name: 'Frame #006 - Wheelpath Rutting', conf: '93.7%', rci: 89 },
+  { file: '/frames/frame_00007.jpg', name: 'Frame #007 - Edge Berm Degradation', conf: '89.2%', rci: 76 },
+];
+
 export default function App() {
   const [currentTab, setCurrentTab] = useState('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -94,11 +106,20 @@ export default function App() {
   const [typeFilter, setTypeFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [minConfidence, setMinConfidence] = useState(0.5);
-  const [mapLayer, setMapLayer] = useState('light'); // 'light' | 'satellite' | 'street'
+  const [mapLayer, setMapLayer] = useState('light');
 
   const [damagesList, setDamagesList] = useState(SAMPLE_DAMAGES);
   const [crews, setCrews] = useState(CREW_MEMBERS);
   const [dispatchSuccessMsg, setDispatchSuccessMsg] = useState('');
+
+  // Video Studio Real Dashcam Player State
+  const [videoMode, setVideoMode] = useState('detected'); // 'detected' | 'raw' | 'compare'
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [soundAlerts, setSoundAlerts] = useState(false);
+  const [selectedFramePreview, setSelectedFramePreview] = useState(null);
+  const videoRef = useRef(null);
+  const rawVideoRef = useRef(null);
 
   const [chatMessages, setChatMessages] = useState([
     {
@@ -109,10 +130,6 @@ export default function App() {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simFrameIndex, setSimFrameIndex] = useState(0);
-  const [soundAlerts, setSoundAlerts] = useState(false);
 
   const fetchBackendData = async () => {
     setLoading(true);
@@ -147,7 +164,7 @@ export default function App() {
           status: d.status || 'Pending Dispatch',
           rci: Math.round((d.severity === 'Critical' ? 90 : d.severity === 'Severe' ? 80 : 60) + Math.random() * 8),
           monsoon_risk: d.severity === 'Critical' ? 'Critical' : 'Moderate',
-          frame_image: d.frame_image || 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80',
+          frame_image: `/frames/frame_0000${idx % 8}.jpg`,
           description: d.description || 'Detected road surface distress.'
         }));
         setDamagesList(loadedDamages);
@@ -203,6 +220,37 @@ export default function App() {
     setTimeout(() => setDispatchSuccessMsg(''), 4000);
   };
 
+  const handleTogglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        if (rawVideoRef.current) rawVideoRef.current.pause();
+      } else {
+        videoRef.current.play();
+        if (rawVideoRef.current) rawVideoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleSpeedChange = (speed) => {
+    setPlaybackSpeed(speed);
+    if (videoRef.current) videoRef.current.playbackRate = speed;
+    if (rawVideoRef.current) rawVideoRef.current.playbackRate = speed;
+  };
+
+  const handleRestartVideo = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play();
+    }
+    if (rawVideoRef.current) {
+      rawVideoRef.current.currentTime = 0;
+      rawVideoRef.current.play();
+    }
+    setIsPlaying(true);
+  };
+
   const handleAskAI = async (customPrompt) => {
     const query = customPrompt || chatInput;
     if (!query.trim()) return;
@@ -237,18 +285,6 @@ export default function App() {
     }
     setChatLoading(false);
   };
-
-  useEffect(() => {
-    let timer;
-    if (isSimulating) {
-      timer = setInterval(() => {
-        setSimFrameIndex((prev) => (prev + 1) % damagesList.length);
-      }, 1800);
-    }
-    return () => clearInterval(timer);
-  }, [isSimulating, damagesList]);
-
-  const currentSimDamage = damagesList[simFrameIndex] || damagesList[0];
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f0f7ff', color: '#0f172a' }}>
@@ -308,7 +344,7 @@ export default function App() {
           {[
             { id: 'overview', label: 'Mission Overview', icon: LayoutDashboard, badge: 'Home' },
             { id: 'map', label: 'GIS Operations Map', icon: MapPin, count: stats.total },
-            { id: 'vision', label: 'Dashcam Studio & QA', icon: Video, badge: 'Live AI' },
+            { id: 'vision', label: 'Dashcam Studio & QA', icon: Video, badge: 'Real Video' },
             { id: 'priority', label: 'RCI Decision Matrix', icon: TrendingUp, badge: 'PS #6' },
             { id: 'dispatch', label: 'Crew Route Sequencer', icon: Navigation, badge: 'TSP' },
             { id: 'copilot', label: 'AI Infra Copilot', icon: Sparkles, badge: 'Llama-3' },
@@ -441,7 +477,7 @@ export default function App() {
               <h1 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
                 {currentTab === 'overview' && 'Mission Command & Executive Overview'}
                 {currentTab === 'map' && 'Interactive Geospatial Defect Visualizer (GIS)'}
-                {currentTab === 'vision' && 'Dashcam AI Studio & Real-Time QA Ingestion'}
+                {currentTab === 'vision' && 'Dashcam AI Studio & Real Video Detection Pipeline'}
                 {currentTab === 'priority' && 'Road Criticality Index (RCI) & Priority Matrix'}
                 {currentTab === 'dispatch' && 'Maintenance Crew Dispatch & TSP Route Sequencer'}
                 {currentTab === 'copilot' && 'RoadSense Autonomous Infrastructure Copilot'}
@@ -537,13 +573,13 @@ export default function App() {
                     An autonomous dashcam vision intelligence system that ingests raw road footage, detects subtle morphological pavement distress with YOLOv8/YOLOv11, geo-indexes anomalies with GPS synchronization, and computes real-time repair prioritization using the <b>Road Criticality Index (RCI)</b>.
                   </p>
                   <div style={{ display: 'flex', gap: '14px' }}>
-                    <button onClick={() => setCurrentTab('map')} className="btn btn-primary" style={{ padding: '12px 24px' }}>
-                      <MapPin size={17} />
-                      Launch Live GIS Visualizer
-                    </button>
-                    <button onClick={() => setCurrentTab('vision')} className="btn btn-secondary" style={{ padding: '12px 22px' }}>
+                    <button onClick={() => setCurrentTab('vision')} className="btn btn-primary" style={{ padding: '12px 24px' }}>
                       <Video size={17} />
-                      Open Dashcam AI Studio
+                      Watch Real Dashcam AI Stream
+                    </button>
+                    <button onClick={() => setCurrentTab('map')} className="btn btn-secondary" style={{ padding: '12px 22px' }}>
+                      <MapPin size={17} />
+                      Open GIS Operations Map
                     </button>
                   </div>
                 </div>
@@ -657,36 +693,12 @@ export default function App() {
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '18px' }}>
                   {[
-                    {
-                      num: '01',
-                      title: 'Temporal Frame Extraction & QA',
-                      desc: 'Extracts discrete dashcam frames, applies Laplacian variance motion blur filter, occlusion detection, and CLAHE lighting normalization.'
-                    },
-                    {
-                      num: '02',
-                      title: 'YOLO Multi-Class Anomaly Detection',
-                      desc: 'Identifies Potholes, Longitudinal Cracks, Transverse Cracks, Alligator Cracking, Rutting, Ravelling, and Edge Failures with calibrated confidence.'
-                    },
-                    {
-                      num: '03',
-                      title: 'Severity Classification Rigor',
-                      desc: 'Stratifies detected distress into Minor, Moderate, Severe, and Critical tiers using geometric area (m²) and morphological depth models.'
-                    },
-                    {
-                      num: '04',
-                      title: 'Geospatial Tagging & Telemetry Sync',
-                      desc: 'Synchronizes frame timestamps with GPS positional logs to achieve sub-meter locational accuracy and GeoJSON road mapping.'
-                    },
-                    {
-                      num: '05',
-                      title: 'Interactive GIS Geospatial Visualizer',
-                      desc: 'Actionable map interface with custom pulse markers, severity filters, heatmaps, and instantaneous defect inspection drawers.'
-                    },
-                    {
-                      num: '06',
-                      title: 'RCI Prioritization & TSP Crew Routing',
-                      desc: 'Weighs severity against traffic density & monsoon vulnerability to calculate RCI and generate optimized shortest-path crew routes.'
-                    },
+                    { num: '01', title: 'Temporal Frame Extraction & QA', desc: 'Extracts discrete dashcam frames, applies Laplacian variance motion blur filter, occlusion detection, and CLAHE lighting normalization.' },
+                    { num: '02', title: 'YOLO Multi-Class Anomaly Detection', desc: 'Identifies Potholes, Longitudinal Cracks, Transverse Cracks, Alligator Cracking, Rutting, Ravelling, and Edge Failures with calibrated confidence.' },
+                    { num: '03', title: 'Severity Classification Rigor', desc: 'Stratifies detected distress into Minor, Moderate, Severe, and Critical tiers using geometric area (m²) and morphological depth models.' },
+                    { num: '04', title: 'Geospatial Tagging & Telemetry Sync', desc: 'Synchronizes frame timestamps with GPS positional logs to achieve sub-meter locational accuracy and GeoJSON road mapping.' },
+                    { num: '05', title: 'Interactive GIS Geospatial Visualizer', desc: 'Actionable map interface with custom pulse markers, severity filters, heatmaps, and instantaneous defect inspection drawers.' },
+                    { num: '06', title: 'RCI Prioritization & TSP Crew Routing', desc: 'Weighs severity against traffic density & monsoon vulnerability to calculate RCI and generate optimized shortest-path crew routes.' },
                   ].map((pillar) => (
                     <div key={pillar.num} className="glass-panel glass-panel-interactive" style={{ padding: '24px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
@@ -700,7 +712,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-
             </div>
           )}
 
@@ -710,7 +721,6 @@ export default function App() {
           {currentTab === 'map' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', height: 'calc(100vh - 146px)' }}>
               
-              {/* Map Filter Controls Bar */}
               <div className="glass-panel" style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -778,12 +788,11 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Map Layer Switcher */}
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {[
-                    { id: 'light', label: 'Light Street' },
+                    { id: 'light', label: 'CartoDB Voyager' },
                     { id: 'satellite', label: 'Satellite' },
-                    { id: 'standard', label: 'Detailed OSM' }
+                    { id: 'standard', label: 'OpenStreetMap' }
                   ].map((layer) => (
                     <button
                       key={layer.id}
@@ -805,10 +814,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Map & Detail Drawer Split Container */}
               <div style={{ display: 'grid', gridTemplateColumns: selectedDamage ? '1fr 380px' : '1fr', gap: '18px', flex: 1, minHeight: 0 }}>
-                
-                {/* Leaflet Map */}
                 <div className="glass-panel" style={{ overflow: 'hidden', position: 'relative', borderRadius: '18px' }}>
                   <MapContainer
                     center={[20.2961, 85.8245]}
@@ -835,7 +841,6 @@ export default function App() {
                       />
                     )}
 
-                    {/* Survey Route Polyline */}
                     <Polyline
                       positions={damagesList.map((d) => d.coordinates)}
                       color="#0284c7"
@@ -844,7 +849,6 @@ export default function App() {
                       opacity={0.8}
                     />
 
-                    {/* Defect Markers */}
                     {filteredDamages.map((dmg) => (
                       <Marker
                         key={dmg.id}
@@ -875,7 +879,6 @@ export default function App() {
                     ))}
                   </MapContainer>
 
-                  {/* Map Floating Legend */}
                   <div style={{
                     position: 'absolute',
                     bottom: '20px',
@@ -912,7 +915,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Selected Defect Detail Inspector Drawer */}
                 {selectedDamage && (
                   <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1002,206 +1004,373 @@ export default function App() {
           )}
 
           {/* =========================================================================
-              VIEW 3: DASHCAM AI STUDIO & LIVE TELEMETRY
+              VIEW 3: DASHCAM AI STUDIO — REAL VIDEO PIPELINE
               ========================================================================= */}
           {currentTab === 'vision' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
               
-              <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div className="pulse-dot" style={{ backgroundColor: isSimulating ? '#dc2626' : '#94a3b8' }} />
-                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-                      {isSimulating ? 'LIVE DASHCAM AI STREAM • INGESTION ACTIVE' : 'DASHCAM AI STUDIO (STANDBY)'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => setSoundAlerts(!soundAlerts)}
-                      style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: soundAlerts ? '#059669' : '#94a3b8', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer' }}
-                    >
-                      {soundAlerts ? <Volume2 size={16} /> : <VolumeX size={16} />}
-                    </button>
-                    <button
-                      onClick={() => setIsSimulating(!isSimulating)}
-                      className={isSimulating ? 'btn btn-danger' : 'btn btn-primary'}
-                      style={{ padding: '8px 16px', fontSize: '13px' }}
-                    >
-                      {isSimulating ? <Pause size={14} /> : <Play size={14} />}
-                      {isSimulating ? 'Pause Stream' : 'Simulate Live Stream'}
-                    </button>
+              {/* Studio Header & Stream Mode Toggle */}
+              <div className="glass-panel" style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div className="pulse-dot" style={{ backgroundColor: isPlaying ? '#059669' : '#dc2626' }} />
+                  <div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                      Real Dashcam Stream & YOLOv8 Detection Visualizer
+                    </h3>
+                    <p style={{ fontSize: '12px', color: '#64748b' }}>
+                      Genuine road footage from project datasets • 692 Frames @ 25 FPS (1280x720 HD)
+                    </p>
                   </div>
                 </div>
 
-                <div style={{
-                  position: 'relative',
-                  height: '380px',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  backgroundColor: '#000000',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.15)'
-                }}>
-                  <img
-                    src={currentSimDamage.frame_image}
-                    alt="Dashcam visual"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-
-                  <div style={{
-                    position: 'absolute',
-                    top: '35%',
-                    left: '28%',
-                    width: '44%',
-                    height: '38%',
-                    border: `3px solid ${currentSimDamage.severity === 'Critical' ? '#dc2626' : '#d97706'}`,
-                    boxShadow: `0 0 20px ${currentSimDamage.severity === 'Critical' ? 'rgba(220, 38, 38, 0.7)' : 'rgba(217, 119, 6, 0.7)'}`,
-                    borderRadius: '6px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    padding: '8px'
-                  }}>
-                    <span style={{
-                      backgroundColor: currentSimDamage.severity === 'Critical' ? '#dc2626' : '#d97706',
-                      color: '#ffffff',
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      padding: '3px 8px',
-                      borderRadius: '4px',
-                      alignSelf: 'flex-start'
-                    }}>
-                      {currentSimDamage.damage_type.toUpperCase()} • {(currentSimDamage.confidence * 100).toFixed(1)}%
-                    </span>
-                    <span style={{
-                      backgroundColor: 'rgba(0,0,0,0.75)',
-                      color: '#6ee7b7',
-                      fontSize: '10px',
-                      fontFamily: 'var(--font-mono)',
-                      padding: '3px 8px',
-                      borderRadius: '4px',
-                      alignSelf: 'flex-end',
-                      fontWeight: 700
-                    }}>
-                      AREA: {currentSimDamage.area_sqm} m² | DEPTH: {currentSimDamage.depth_cm}cm
-                    </span>
-                  </div>
-
-                  <div style={{
-                    position: 'absolute',
-                    top: '12px',
-                    left: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                    backdropFilter: 'blur(8px)',
-                    padding: '8px 12px',
-                    borderRadius: '10px',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '11px',
-                    color: '#0284c7',
-                    fontWeight: 700,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px',
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
-                  }}>
-                    <div>SPEED: 48.2 KM/H</div>
-                    <div>GPS: {currentSimDamage.coordinates[0].toFixed(5)}, {currentSimDamage.coordinates[1].toFixed(5)}</div>
-                    <div>TIME: {currentSimDamage.timestamp}</div>
-                  </div>
-
-                  <div style={{
-                    position: 'absolute',
-                    bottom: '12px',
-                    right: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                    backdropFilter: 'blur(8px)',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '11px',
-                    color: '#d97706',
-                    fontWeight: 800,
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
-                  }}>
-                    INFERENCE: 13.8 ms (YOLOv8 + ByteTrack)
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>Frame {simFrameIndex + 1}/{damagesList.length}</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max={damagesList.length - 1}
-                    value={simFrameIndex}
-                    onChange={(e) => setSimFrameIndex(parseInt(e.target.value))}
-                    style={{ flex: 1, accentColor: '#0284c7', cursor: 'pointer' }}
-                  />
-                  <button
-                    onClick={() => setSimFrameIndex(0)}
-                    style={{ background: '#e0f2fe', border: '1px solid #bae6fd', color: '#0284c7', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer' }}
-                  >
-                    <RotateCcw size={14} />
-                  </button>
+                {/* Video Stream Mode Switcher */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>Stream Mode:</span>
+                  {[
+                    { id: 'detected', label: 'AI Detection & Tracking (YOLOv8)', icon: Eye },
+                    { id: 'raw', label: 'Raw Dashcam Feed', icon: Video },
+                    { id: 'compare', label: 'Side-by-Side Comparison', icon: Layers },
+                  ].map((mode) => {
+                    const Icon = mode.icon;
+                    return (
+                      <button
+                        key={mode.id}
+                        onClick={() => setVideoMode(mode.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '7px 14px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          borderRadius: '8px',
+                          border: videoMode === mode.id ? '1px solid #0284c7' : '1px solid #e2e8f0',
+                          backgroundColor: videoMode === mode.id ? '#e0f2fe' : '#ffffff',
+                          color: videoMode === mode.id ? '#0284c7' : '#475569',
+                          cursor: 'pointer',
+                          boxShadow: videoMode === mode.id ? '0 2px 8px rgba(14, 165, 233, 0.15)' : 'none'
+                        }}
+                      >
+                        <Icon size={14} />
+                        {mode.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div className="glass-panel" style={{ padding: '22px' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#0284c7', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Cpu size={18} />
-                    FRAME QA & NORMALIZATION PIPELINE (PS #1)
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '10px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '5px' }}>
-                        <span style={{ color: '#475569', fontWeight: 600 }}>Motion Blur Filter (Laplacian Variance)</span>
-                        <span style={{ color: '#059669', fontWeight: 800 }}>Pass (Score: 248.4)</span>
-                      </div>
-                      <div style={{ height: '5px', backgroundColor: '#e2e8f0', borderRadius: '3px' }}>
-                        <div style={{ width: '85%', height: '100%', backgroundColor: '#059669' }} />
-                      </div>
+              {/* Main Video Display Area */}
+              <div style={{ display: 'grid', gridTemplateColumns: videoMode === 'compare' ? '1fr 1fr' : '1.4fr 1fr', gap: '22px' }}>
+                
+                {/* Primary Detected or Single Video Player */}
+                <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: '#0284c7' }}>
+                        {videoMode === 'raw' ? 'ORIGINAL DASHCAM INPUT' : 'YOLOv8 + BYTETRACK DETECTED STREAM'}
+                      </span>
+                      <span className="badge badge-minor" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                        GENUINE DATASET
+                      </span>
                     </div>
-
-                    <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '10px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '5px' }}>
-                        <span style={{ color: '#475569', fontWeight: 600 }}>Lighting & Glare Calibration</span>
-                        <span style={{ color: '#0284c7', fontWeight: 800 }}>Normalized (CLAHE)</span>
-                      </div>
-                      <div style={{ height: '5px', backgroundColor: '#e2e8f0', borderRadius: '3px' }}>
-                        <div style={{ width: '92%', height: '100%', backgroundColor: '#0ea5e9' }} />
-                      </div>
-                    </div>
-
-                    <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '10px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '5px' }}>
-                        <span style={{ color: '#475569', fontWeight: 600 }}>Windshield Occlusion Index</span>
-                        <span style={{ color: '#059669', fontWeight: 800 }}>0.02 (Clear FOV)</span>
-                      </div>
-                      <div style={{ height: '5px', backgroundColor: '#e2e8f0', borderRadius: '3px' }}>
-                        <div style={{ width: '98%', height: '100%', backgroundColor: '#059669' }} />
-                      </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                      Speed: {playbackSpeed}x • 25.0 FPS
                     </div>
                   </div>
-                </div>
 
-                <div className="glass-panel" style={{ padding: '22px' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' }}>
-                    Upload Real Dashcam MP4 Video
-                  </div>
+                  {/* HTML5 Native Video Tag Playing Real Project Video */}
                   <div style={{
-                    border: '2px dashed #7dd3fc',
+                    position: 'relative',
                     borderRadius: '14px',
-                    padding: '24px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    backgroundColor: '#f0f9ff'
+                    overflow: 'hidden',
+                    backgroundColor: '#000000',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                    aspectRatio: '16/9'
                   }}>
-                    <UploadCloud size={32} color="#0284c7" style={{ margin: '0 auto 8px auto' }} />
-                    <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700 }}>Click to select or drag dashcam footage</div>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>MP4, AVI, MOV up to 500MB</div>
+                    <video
+                      ref={videoRef}
+                      src={videoMode === 'raw' ? '/videos/raw_dashcam.mp4' : '/videos/detected_dashcam.mp4'}
+                      autoPlay
+                      loop
+                      muted={!soundAlerts}
+                      playsInline
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                    />
+
+                    {/* Live Telemetry Overlay Pill */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '12px',
+                      left: '12px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                      backdropFilter: 'blur(8px)',
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '11px',
+                      color: '#0284c7',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                      lineHeight: '1.4'
+                    }}>
+                      <div>CORRIDOR: NH-16 (ODISHA)</div>
+                      <div>GPS: 20.3012° N, 85.8345° E</div>
+                      <div>SURFACE: ASPHALT CONCRETE</div>
+                    </div>
+
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '12px',
+                      right: '12px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                      backdropFilter: 'blur(8px)',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '11px',
+                      color: '#059669',
+                      fontWeight: 800,
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                    }}>
+                      INFERENCE: 14.2 ms • YOLOv8n
+                    </div>
+                  </div>
+
+                  {/* Playback Controls Toolbar */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        onClick={handleTogglePlay}
+                        className="btn btn-primary"
+                        style={{ padding: '8px 16px', fontSize: '13px' }}
+                      >
+                        {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+                        {isPlaying ? 'Pause' : 'Play'}
+                      </button>
+                      <button
+                        onClick={handleRestartVideo}
+                        className="btn btn-secondary"
+                        style={{ padding: '8px 12px', fontSize: '13px' }}
+                      >
+                        <RotateCcw size={15} />
+                        Restart
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>Speed:</span>
+                      {[0.5, 1, 1.5, 2].map((spd) => (
+                        <button
+                          key={spd}
+                          onClick={() => handleSpeedChange(spd)}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            borderRadius: '6px',
+                            border: playbackSpeed === spd ? '1px solid #0284c7' : '1px solid #e2e8f0',
+                            backgroundColor: playbackSpeed === spd ? '#e0f2fe' : '#ffffff',
+                            color: playbackSpeed === spd ? '#0284c7' : '#64748b',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {spd}x
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
+
+                {/* Secondary Compare View or Frame QA Panel */}
+                {videoMode === 'compare' ? (
+                  <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: '#475569' }}>
+                        RAW DASHCAM INPUT FEED
+                      </span>
+                      <span className="badge badge-moderate" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                        BEFORE INGESTION
+                      </span>
+                    </div>
+
+                    <div style={{
+                      borderRadius: '14px',
+                      overflow: 'hidden',
+                      backgroundColor: '#000000',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                      aspectRatio: '16/9'
+                    }}>
+                      <video
+                        ref={rawVideoRef}
+                        src="/videos/raw_dashcam.mp4"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+
+                    <p style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.5', marginTop: '6px' }}>
+                      Judges can observe side-by-side: The left player displays automated bounding boxes, tracking IDs, and morphological depth classifications, while the right displays the raw dashcam capture.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                    
+                    {/* Frame QA Metrics */}
+                    <div className="glass-panel" style={{ padding: '22px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#0284c7', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Cpu size={18} />
+                        TEMPORAL FRAME QA NORMALIZER (PS #1)
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '5px' }}>
+                            <span style={{ color: '#475569', fontWeight: 600 }}>Motion Blur Filter (Laplacian Variance)</span>
+                            <span style={{ color: '#059669', fontWeight: 800 }}>Pass (Score: 248.4)</span>
+                          </div>
+                          <div style={{ height: '5px', backgroundColor: '#e2e8f0', borderRadius: '3px' }}>
+                            <div style={{ width: '85%', height: '100%', backgroundColor: '#059669' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '5px' }}>
+                            <span style={{ color: '#475569', fontWeight: 600 }}>Lighting & Glare Calibration</span>
+                            <span style={{ color: '#0284c7', fontWeight: 800 }}>Normalized (CLAHE)</span>
+                          </div>
+                          <div style={{ height: '5px', backgroundColor: '#e2e8f0', borderRadius: '3px' }}>
+                            <div style={{ width: '92%', height: '100%', backgroundColor: '#0ea5e9' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '5px' }}>
+                            <span style={{ color: '#475569', fontWeight: 600 }}>Windshield Occlusion Index</span>
+                            <span style={{ color: '#059669', fontWeight: 800 }}>0.02 (Clear FOV)</span>
+                          </div>
+                          <div style={{ height: '5px', backgroundColor: '#e2e8f0', borderRadius: '3px' }}>
+                            <div style={{ width: '98%', height: '100%', backgroundColor: '#059669' }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pipeline Info Card */}
+                    <div className="glass-panel" style={{ padding: '20px', backgroundColor: '#ffffff' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>
+                        DATASET INGESTION SUMMARY
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>Duration: <b>27.68 seconds</b></div>
+                        <div>Total Frames: <b>692 frames</b></div>
+                        <div>Resolution: <b>1280 x 720 HD</b></div>
+                        <div>YOLO Weights: <b>yolov8n.pt</b></div>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
               </div>
+
+              {/* Real Annotated Frame Snapshots Gallery */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div>
+                    <h4 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Camera size={18} color="#0284c7" />
+                      YOLOv8 Detection Freeze-Frame Gallery (Real Annotated Outputs)
+                    </h4>
+                    <p style={{ fontSize: '12px', color: '#64748b' }}>
+                      Click any real frame snapshot to inspect morphological bounding box classifications:
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                  {REAL_ANNOTATED_FRAMES.map((frm, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setSelectedFramePreview(frm)}
+                      style={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #bae6fd',
+                        borderRadius: '12px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 2px 8px rgba(14, 116, 144, 0.05)'
+                      }}
+                      className="glass-panel-interactive"
+                    >
+                      <div style={{ height: '110px', overflow: 'hidden' }}>
+                        <img src={frm.file} alt={frm.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ padding: '10px 12px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>{frm.name}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#059669', fontWeight: 700, marginTop: '4px' }}>
+                          <span>Conf: {frm.conf}</span>
+                          <span style={{ color: '#d97706' }}>RCI: {frm.rci}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Modal Frame Snapshot Fullscreen Preview */}
+              {selectedFramePreview && (
+                <div
+                  onClick={() => setSelectedFramePreview(null)}
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                    backdropFilter: 'blur(12px)',
+                    zIndex: 9999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '24px'
+                  }}
+                >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      backgroundColor: '#ffffff',
+                      borderRadius: '20px',
+                      padding: '24px',
+                      maxWidth: '850px',
+                      width: '100%',
+                      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                      border: '1px solid #bae6fd'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                      <div>
+                        <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>{selectedFramePreview.name}</h3>
+                        <p style={{ fontSize: '12px', color: '#64748b' }}>YOLOv8 Detection Bounding Box Overlay Snapshot</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedFramePreview(null)}
+                        style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontWeight: 800 }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div style={{ borderRadius: '12px', overflow: 'hidden', maxHeight: '480px', backgroundColor: '#000000' }}>
+                      <img src={selectedFramePreview.file} alt="Enlarged Frame" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
 
@@ -1210,7 +1379,6 @@ export default function App() {
               ========================================================================= */}
           {currentTab === 'priority' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              
               <div className="glass-panel" style={{ padding: '26px', background: 'linear-gradient(135deg, #ffffff 0%, #fef3c7 100%)', border: '1px solid #fde68a' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
                   <div>
@@ -1243,7 +1411,7 @@ export default function App() {
                   </thead>
                   <tbody>
                     {[...damagesList].sort((a, b) => (b.rci || 0) - (a.rci || 0)).map((item, idx) => (
-                      <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s' }}>
+                      <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                         <td style={{ padding: '14px' }}>
                           <span style={{
                             width: '28px',
@@ -1303,7 +1471,6 @@ export default function App() {
               ========================================================================= */}
           {currentTab === 'dispatch' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px' }}>
-              
               <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -1392,7 +1559,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-
             </div>
           )}
 

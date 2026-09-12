@@ -16,7 +16,7 @@ export const SAMPLE_DAMAGES = [
     status: 'Pending Dispatch',
     rci: 94.2,
     monsoon_risk: 'High',
-    frame_image: 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80',
+    frame_image: '/frames/frame_00000.jpg',
     description: 'Deep asphalt disintegration across inner transit lane posing acute tire puncture hazard.'
   },
   {
@@ -36,7 +36,7 @@ export const SAMPLE_DAMAGES = [
     status: 'Assigned',
     rci: 82.5,
     monsoon_risk: 'Severe',
-    frame_image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80',
+    frame_image: '/frames/frame_00002.jpg',
     description: 'Interconnected fatigue cracking indicating subgrade moisture failure; imminent pothole genesis.'
   },
   {
@@ -56,7 +56,7 @@ export const SAMPLE_DAMAGES = [
     status: 'Scheduled',
     rci: 61.4,
     monsoon_risk: 'Moderate',
-    frame_image: 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80',
+    frame_image: '/frames/frame_00004.jpg',
     description: 'Linear separation along pavement joint line. Requires crack sealing before rain seepage.'
   },
   {
@@ -76,7 +76,7 @@ export const SAMPLE_DAMAGES = [
     status: 'Pending Dispatch',
     rci: 89.0,
     monsoon_risk: 'High',
-    frame_image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80',
+    frame_image: '/frames/frame_00006.jpg',
     description: 'Heavy commercial vehicle wheelpath depression causing hydroplaning risk during precipitation.'
   },
   {
@@ -96,7 +96,7 @@ export const SAMPLE_DAMAGES = [
     status: 'In Repair',
     rci: 96.5,
     monsoon_risk: 'Critical',
-    frame_image: 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80',
+    frame_image: '/frames/frame_00008.jpg',
     description: 'Severe crater with exposed aggregate base. Immediate hot-mix asphalt patching required.'
   },
   {
@@ -116,7 +116,7 @@ export const SAMPLE_DAMAGES = [
     status: 'Resolved',
     rci: 41.0,
     monsoon_risk: 'Low',
-    frame_image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80',
+    frame_image: '/frames/frame_00010.jpg',
     description: 'Surface stone loss due to binder weathering. Micro-surfacing recommended in Q4 schedule.'
   },
   {
@@ -136,7 +136,7 @@ export const SAMPLE_DAMAGES = [
     status: 'Scheduled',
     rci: 68.3,
     monsoon_risk: 'High',
-    frame_image: 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80',
+    frame_image: '/frames/frame_00012.jpg',
     description: 'Berm erosion causing 8cm asphalt drop-off. Poses severe roll-over hazard for two-wheelers.'
   }
 ];
