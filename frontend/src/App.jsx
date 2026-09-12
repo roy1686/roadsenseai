@@ -510,88 +510,34 @@ function App() {
      ------------------------------------------------------- */
 
   const loadDashboardData = async () => {
-
     try {
-
       setError("");
 
-      const [
-        detectionsResponse,
-        trackingResponse,
-        damagesResponse,
-      ] = await Promise.all([
-
-        fetch(
-          `${API_BASE_URL}/api/m1/detections`
-        ),
-
-        fetch(
-          `${API_BASE_URL}/api/tracking/summary`
-        ),
-
-        fetch(
-          `${API_BASE_URL}/api/damages`
-        ),
-
+      const [detectionsResult, trackingResult, damagesResult] = await Promise.allSettled([
+        fetch(`${API_BASE_URL}/api/m1/detections`).then((r) => (r.ok ? r.json() : [])),
+        fetch(`${API_BASE_URL}/api/tracking/summary`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API_BASE_URL}/api/damages`).then((r) => (r.ok ? r.json() : [])),
       ]);
 
-      if (
-        !detectionsResponse.ok
-      ) {
-        throw new Error(
-          "Failed to fetch detections."
-        );
-      }
+      const detectionsData = detectionsResult.status === "fulfilled" ? detectionsResult.value : [];
+      const trackingData = trackingResult.status === "fulfilled" ? trackingResult.value : null;
+      const damagesData = damagesResult.status === "fulfilled" ? damagesResult.value : [];
 
       if (
-        !trackingResponse.ok
+        detectionsResult.status === "rejected" &&
+        damagesResult.status === "rejected"
       ) {
-        throw new Error(
-          "Failed to fetch tracking data."
-        );
+        throw new Error("Unable to connect to RoadSense backend.");
       }
 
-      if (
-        !damagesResponse.ok
-      ) {
-        throw new Error(
-          "Failed to fetch M2 damage data."
-        );
-      }
-
-      const detectionsData =
-        await detectionsResponse.json();
-
-      const trackingData =
-        await trackingResponse.json();
-
-      const damagesData =
-        await damagesResponse.json();
-
-      setDetections(
-        detectionsData
-      );
-
-      setTracking(
-        trackingData
-      );
-
-      setDamages(
-        damagesData
-      );
-
+      setDetections(detectionsData || []);
+      setTracking(trackingData);
+      setDamages(damagesData || []);
     } catch (err) {
-
       console.error(err);
-
-      setError(
-        "Unable to connect to RoadSense backend."
-      );
-
+      setError("Unable to connect to RoadSense backend.");
     } finally {
-
       setLoading(false);
-
     }
   };
 

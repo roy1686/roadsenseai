@@ -715,13 +715,12 @@ def get_tracking_summary():
     )
 
     if not summary_path.exists():
-
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Tracking summary not available."
-            )
-        )
+        return {
+            "total_tracked_detections": 0,
+            "unique_tracked_objects": 0,
+            "unique_pothole_tracks": 0,
+            "status": "no_data"
+        }
 
     with open(
         summary_path,
