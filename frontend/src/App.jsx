@@ -7,6 +7,8 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
 /* =========================================================
    GEOJSON UPLOAD COMPONENT
    ========================================================= */
@@ -29,7 +31,7 @@ function UploadGeoJSON({ onUpload }) {
     setMessage("");
 
     try {
-      const response = await fetch("/api/upload", {
+      const response = await fetch(`${API_BASE_URL}/api/upload`, {
         method: "POST",
         body: formData,
       });
@@ -126,7 +128,7 @@ function UploadVideo({ onProcessed }) {
     setResult(null);
 
     try {
-      const response = await fetch("/api/upload-video", {
+      const response = await fetch(`${API_BASE_URL}/api/upload-video`, {
         method: "POST",
         body: formData,
       });
@@ -366,7 +368,7 @@ function AgentChat() {
 
     try {
       const response = await fetch(
-        "/api/agent/ask",
+        `${API_BASE_URL}/api/agent/ask`,
         {
           method: "POST",
           headers: {
@@ -517,15 +519,15 @@ function App() {
       ] = await Promise.all([
 
         fetch(
-          "/api/m1/detections"
+          `${API_BASE_URL}/api/m1/detections`
         ),
 
         fetch(
-          "/api/tracking/summary"
+          `${API_BASE_URL}/api/tracking/summary`
         ),
 
         fetch(
-          "/api/damages"
+          `${API_BASE_URL}/api/damages`
         ),
 
       ]);
