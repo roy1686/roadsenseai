@@ -819,7 +819,7 @@ export default function App() {
                     {mapLayer === 'light' && (
                       <TileLayer
                         attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-                        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                        url="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3hyp_1_a8720dfab189922c164deda9"
                       />
                     )}
                     {mapLayer === 'satellite' && (
