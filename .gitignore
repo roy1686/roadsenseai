@@ -1,35 +1,89 @@
-﻿# Node
+# Node & Package Managers
 node_modules/
 frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Python
+# Python & Caches
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 .venv/
 venv/
+ENV/
+env/
 
-# Environment / secrets
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Database files (Zero leak)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+roadsense.db
+
+# Environment & Secret variables
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 
-# Vite / build
-dist/
+# Vite / Frontend build artifacts
 frontend/dist/
+dist/
 .vite/
 
-# Generated processing outputs
+# Processing Pipeline runtime data (auto-generated)
 runs/
-data/processed/frames_output/
-data/processed/video_upload_test/
-data/processed/yolo_output/annotated/
-data/processed/tracking_output/
-
-# Uploaded / generated videos
+logs/
+scratch/
+data/processed/
+data/processed/**
+data/raw/video_uploads/*
+!data/raw/video_uploads/.gitkeep
+!data/raw/demo_clip/*
 *.avi
-data/raw/video_uploads/
+frontend/public/frames/frame_*
+frontend/public/frames/annotated_*
+frontend/public/annotated_*.mp4
+frontend/public/detected_*.mp4
+frontend/public/survey_*.mp4
 
-# OS / IDE
+# OS & Editor Artifacts
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 .vscode/
 .idea/
+*.swp
+*.swo
+

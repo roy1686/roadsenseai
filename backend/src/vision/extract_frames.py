@@ -32,6 +32,8 @@ class FrameRecord:
     timestamp_sec: float       # actual timestamp from the video (cv2 CAP_PROP_POS_MSEC / 1000)
     filename: str
     laplacian_variance: float
+    brightness: float          # mean pixel intensity (0-255)
+    quality_status: str        # "GOOD" | "BLURRY" | "DARK" | "OVEREXPOSED"
     is_blurry: bool
 
     def to_dict(self) -> dict:
@@ -40,7 +42,22 @@ class FrameRecord:
 
 def laplacian_variance(frame) -> float:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    return cv2.Laplacian(gray, cv2.CV_64F).var()
+    return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+
+
+def calculate_brightness(frame) -> float:
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    return float(gray.mean())
+
+
+def classify_frame_quality(var: float, brightness: float, blur_threshold: float = DEFAULT_BLUR_THRESHOLD) -> str:
+    if var < blur_threshold:
+        return "BLURRY"
+    if brightness < 40.0:
+        return "DARK"
+    if brightness > 220.0:
+        return "OVEREXPOSED"
+    return "GOOD"
 
 
 def extract_frames(video_path: Path, out_dir: Path, interval_sec: float = 1.0,
@@ -63,6 +80,9 @@ def extract_frames(video_path: Path, out_dir: Path, interval_sec: float = 1.0,
 
     source_fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
     total_source_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    duration_sec = (total_source_frames / source_fps) if source_fps > 0 else 0.0
 
     records: list[FrameRecord] = []
     saved_index = 0
@@ -86,7 +106,9 @@ def extract_frames(video_path: Path, out_dir: Path, interval_sec: float = 1.0,
             continue
 
         var = laplacian_variance(frame)
-        is_blurry = var < blur_threshold
+        brightness = calculate_brightness(frame)
+        quality_status = classify_frame_quality(var, brightness, blur_threshold)
+        is_blurry = quality_status == "BLURRY"
 
         filename = f"frame_{saved_index:05d}.jpg"
         cv2.imwrite(str(frames_dir / filename), frame)
@@ -97,6 +119,8 @@ def extract_frames(video_path: Path, out_dir: Path, interval_sec: float = 1.0,
             timestamp_sec=round(timestamp_sec, 3),
             filename=filename,
             laplacian_variance=round(var, 2),
+            brightness=round(brightness, 2),
+            quality_status=quality_status,
             is_blurry=is_blurry,
         ))
 
@@ -107,23 +131,27 @@ def extract_frames(video_path: Path, out_dir: Path, interval_sec: float = 1.0,
 
     # Manifest CSV
     manifest_path = out_dir / "frame_manifest.csv"
-    with open(manifest_path, "w", newline="") as f:
+    with open(manifest_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=[
             "frame_number", "saved_index", "timestamp_sec",
-            "filename", "laplacian_variance", "is_blurry",
+            "filename", "laplacian_variance", "brightness", "quality_status", "is_blurry",
         ])
         writer.writeheader()
         for r in records:
             writer.writerow(r.to_dict())
 
     n_blurry = sum(1 for r in records if r.is_blurry)
+    n_good = sum(1 for r in records if r.quality_status == "GOOD")
     summary = {
         "video_filename": video_path.name,
         "source_fps": round(source_fps, 3),
         "source_total_frames": total_source_frames,
+        "resolution": f"{width}x{height}",
+        "duration_sec": round(duration_sec, 2),
         "extraction_interval_sec": interval_sec,
         "blur_threshold": blur_threshold,
         "frames_extracted": len(records),
+        "usable_frames": n_good,
         "frames_flagged_blurry": n_blurry,
         "frames_dir": str(frames_dir),
         "manifest_csv": str(manifest_path),
