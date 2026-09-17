@@ -5,12 +5,23 @@ import csv
 import shutil
 import hashlib
 import subprocess
-import imageio_ffmpeg
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import cv2
 from sqlalchemy.orm import Session
+
+def get_ffmpeg_executable() -> str:
+    """Finds available ffmpeg binary via system PATH or imageio_ffmpeg fallback."""
+    sys_bin = shutil.which("ffmpeg")
+    if sys_bin:
+        return sys_bin
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"
+
 
 from app.config import settings, PROJECT_ROOT
 
@@ -103,7 +114,7 @@ def generate_full_annotated_video(
 
         output_video_path = Path(output_video_path)
         output_video_path.parent.mkdir(parents=True, exist_ok=True)
-        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        ffmpeg_exe = get_ffmpeg_executable()
 
         cmd = [
             ffmpeg_exe, "-y",
@@ -514,7 +525,7 @@ def process_survey_video_async(
                     raise RuntimeError("generate_full_annotated_video returned False")
             elif annotated_frame_files:
                 # Fallback to compiling from annotated keyframes
-                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                ffmpeg_exe = get_ffmpeg_executable()
                 temp_list = work_dir / "ffmpeg_frames.txt"
                 with open(temp_list, "w", encoding="utf-8") as f:
                     for fr in annotated_frame_files:
