@@ -8,7 +8,7 @@ backend_api_dir = Path(__file__).resolve().parents[1] / "api"
 sys.path.insert(0, str(backend_api_dir))
 
 from app.main import app
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, init_db
 from app.db.models import Survey, DamageInstance
 from fastapi.testclient import TestClient
 
@@ -33,6 +33,7 @@ def create_clean_road_video(output_path: Path, duration_sec: int = 4, fps: int =
 
 
 def test_video_processing_pipeline():
+    init_db()
     client = TestClient(app)
 
     # 1. Login

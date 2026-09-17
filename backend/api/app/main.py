@@ -6,6 +6,7 @@ api_dir = str(Path(__file__).resolve().parent.parent)
 if api_dir not in sys.path:
     sys.path.insert(0, api_dir)
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,10 +17,25 @@ from app.api.endpoints import router
 from app.config import settings
 from app.db.session import init_db
 
+# Always ensure tables and seed data exist immediately
+try:
+    init_db()
+except Exception as e:
+    print(f"[DB BOOT] Note on init_db: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print(f"[STARTUP] Initializing {settings.PROJECT_NAME} v{settings.VERSION} [{settings.ENVIRONMENT}]...")
+    init_db()
+    print("[STARTUP] Database tables verified & recovery routine completed.")
+    yield
+    print("[SHUTDOWN] ROADSense AI Backend shut down gracefully.")
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="ROADSense AI — Production Autonomous Road Infrastructure Vision Intelligence Platform",
-    version=settings.VERSION
+    version=settings.VERSION,
+    lifespan=lifespan
 )
 
 # CORS Middleware with production protection
@@ -76,8 +92,3 @@ async def websocket_endpoint(websocket: WebSocket):
         except Exception:
             pass
 
-@app.on_event("startup")
-def startup_event():
-    print(f"[STARTUP] Initializing {settings.PROJECT_NAME} v{settings.VERSION} [{settings.ENVIRONMENT}]...")
-    init_db()
-    print("[STARTUP] Database tables verified & recovery routine completed.")

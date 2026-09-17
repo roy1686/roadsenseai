@@ -7,11 +7,12 @@ backend_api_dir = Path(__file__).resolve().parents[1] / "api"
 sys.path.insert(0, str(backend_api_dir))
 
 from app.main import app
-from app.db.session import SessionLocal, recover_stale_processing_jobs
+from app.db.session import SessionLocal, recover_stale_processing_jobs, init_db
 from app.db.models import Survey, ProcessingJob, User
 from fastapi.testclient import TestClient
 
 def test_failure_recovery_and_concurrency():
+    init_db()
     client = TestClient(app)
 
     # 1. Login

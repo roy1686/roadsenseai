@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 
@@ -7,14 +7,14 @@ from datetime import datetime
 # Auth Schemas
 # -------------------------------------------------------------
 class UserRegisterRequest(BaseModel):
-    email: EmailStr
+    email: str = Field(..., min_length=3)
     password: str = Field(..., min_length=6)
     full_name: str
     role: Optional[str] = "VIEWER"  # ADMIN, ENGINEER, VIEWER
 
 
 class UserLoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 

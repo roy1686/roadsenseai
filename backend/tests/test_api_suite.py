@@ -6,9 +6,11 @@ backend_api_dir = Path(__file__).resolve().parents[1] / "api"
 sys.path.insert(0, str(backend_api_dir))
 
 from app.main import app
+from app.db.session import init_db
 from fastapi.testclient import TestClient
 
 def test_full_pipeline_apis():
+    init_db()
     client = TestClient(app)
 
     # 1. Health
